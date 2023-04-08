@@ -1,17 +1,26 @@
 package com.timwue.dejaview
 
-import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
@@ -22,25 +31,29 @@ import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.*
 import com.google.android.gms.tasks.OnCompleteListener
 import com.timwue.dejaview.ui.theme.DejaviewTheme
+import com.timwue.dejaview.usecase.checkPermissions
+import com.timwue.dejaview.usecase.requestPermissions
 import com.timwue.dejaview.view.components.Device
 import com.timwue.dejaview.view.components.DeviceList
 import com.timwue.dejaview.view.components.GpsLocation
 
-
-val device1= Device("a647abd1-e65c-451d-86c1-335bacbcd147", "20db", "TestDevice")
-
 class MainActivity : ComponentActivity() {
 
+    private lateinit var bluetoothLeScanner: BluetoothLeScanner
+    private lateinit var scanCallback: ScanCallback
     private lateinit var locationProvider : FusedLocationProviderClient
-
+    private lateinit var locationCallback: LocationCallback
+    private var devices = mutableMapOf<String, Device>()
     private var currentLocation = mutableStateOf<Location?>(null)
     private var PERMISSION_ID = 44
 
+    @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        locationProvider = LocationServices.getFusedLocationProviderClient(this)
-        getLastLocation()
+        initializeBleAdapter()
+        initializeLocationProvider()
+
         setContent {
             DejaviewTheme {
                 Surface(
@@ -51,86 +64,80 @@ class MainActivity : ComponentActivity() {
                         GpsLocation(currentLocation.value)
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        DeviceList(
-                            listOf(
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1,
-                                device1
-                            )
-                        )
+                        DeviceList(devices.values.sortedByDescending { device -> device.rssi })
                     }
                 }
             }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
+    override fun onResume() {
+        super.onResume()
+        startLocationUpdates()
+    }
     @SuppressLint("MissingPermission")
-    private fun getLastLocation() {
-        if (checkPermissions()) {
-            if (isLocationEnabled()) {
-                locationProvider.lastLocation
-                    .addOnCompleteListener(OnCompleteListener<Location?> { task ->
-                        if (task.result !== null) {
-                            val location: Location = task.result
-                            currentLocation.value = location
-                        }
-                    })
-            } else {
-                Toast.makeText(this, "Please turn on" + " your location...", Toast.LENGTH_LONG)
-                    .show()
-                val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                startActivity(intent)
-            }
-        } else {
-            requestPermissions()
+    @RequiresApi(Build.VERSION_CODES.S)
+    override fun onPause() {
+        super.onPause()
+        locationProvider.removeLocationUpdates(locationCallback)
+
+        if (checkPermissions(this)) {
+            bluetoothLeScanner.stopScan(scanCallback)
         }
     }
 
-    private fun checkPermissions(): Boolean {
-        return ActivityCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        // If we want background location
-        // on Android 10.0 and higher,
-        // use:
-        // ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+    private fun initializeLocationProvider(){
+        locationProvider = LocationServices.getFusedLocationProviderClient(this)
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                for (location in locationResult.locations){
+                    currentLocation.value = location
+                }
+            }
+        }
     }
 
-    private fun requestPermissions() {
-        ActivityCompat.requestPermissions(
-            this, arrayOf<String>(
-                Manifest.permission.ACCESS_COARSE_LOCATION,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ), PERMISSION_ID
-        )
-    }
+    @RequiresApi(Build.VERSION_CODES.S)
+    @SuppressLint("MissingPermission")
+    private fun initializeBleAdapter(){
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter
+        if (!bluetoothAdapter.isEnabled || !packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            showToast("Please enable Bluetooth.")
+        }
 
+        scanCallback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                var deviceName = "N/A"
+                if (result.device.name !== null){
+                    deviceName = result.device.name
+                }
+                val device = Device(result.device.address, result.rssi, deviceName)
+                devices[device.id] = device
+            }
+        }
+
+        bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+
+        val scanFilter = ScanFilter.Builder()
+            // Add any desired filters here
+            .build()
+
+        if (checkPermissions(this)) {
+            bluetoothLeScanner.startScan(listOf(scanFilter), scanSettings, scanCallback)
+        }
+    }
     private fun isLocationEnabled(): Boolean {
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(
-            LocationManager.NETWORK_PROVIDER
-        )
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String?>,
@@ -139,16 +146,38 @@ class MainActivity : ComponentActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_ID) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                getLastLocation()
+                startLocationUpdates()
             }
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (checkPermissions()) {
-            getLastLocation()
+    @RequiresApi(Build.VERSION_CODES.S)
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        if (checkPermissions(this)) {
+            if (isLocationEnabled()) {
+                val locationRequest = LocationRequest
+                    .Builder(Priority.PRIORITY_HIGH_ACCURACY,10000)
+                    .build()
+
+                locationProvider.requestLocationUpdates(locationRequest,
+                    locationCallback,
+                    Looper.getMainLooper()
+                )
+            } else {
+                showToast("Please turn on your location!")
+            }
+        } else {
+            requestPermissions(this, PERMISSION_ID)
         }
     }
+
+    private fun showToast(text : String){
+        Toast.makeText(this, text, Toast.LENGTH_LONG)
+            .show()
+        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        startActivity(intent)
+    }
+
 }
 
