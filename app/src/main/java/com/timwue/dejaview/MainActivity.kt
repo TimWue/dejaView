@@ -136,18 +136,11 @@ class MainActivity : ComponentActivity() {
 
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                var deviceName = "N/A"
-                if (result.device.name !== null){
-                    deviceName = result.device.name
-                }
-
-                val deviceId = result.device.address
                 val currentTimestamp = System.currentTimeMillis()
-
+                val deviceName = result.device.name ?: "N/A"
+                val deviceId = result.device.address
                 val device = devices[deviceId] ?: Device(result.device.address, result.rssi, deviceName, currentTimestamp)
                 device.meetTimes.plus(currentTimestamp)
-
-
                 devices[device.id] = device
             }
         }
