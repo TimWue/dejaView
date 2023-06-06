@@ -8,5 +8,6 @@ import androidx.room.PrimaryKey
 data class Device(
     @PrimaryKey @ColumnInfo(name = "id") val id : String,
     @ColumnInfo(name = "rssi") val rssi: Int,
-    @ColumnInfo(name = "name") val name: String
+    @ColumnInfo(name = "name") val name: String,
+    @ColumnInfo(name = "lastSeen") val lastSeen: Long
 )

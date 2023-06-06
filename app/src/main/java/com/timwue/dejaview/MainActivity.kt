@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                         GpsLocation(currentLocation.value)
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        DeviceList(devices.values.sortedByDescending { device -> device.rssi })
+                        DeviceList(devices.values.sortedByDescending { device -> device.lastSeen })
                     }
                 }
             }
@@ -140,7 +140,9 @@ class MainActivity : ComponentActivity() {
                 if (result.device.name !== null){
                     deviceName = result.device.name
                 }
-                val device = Device(result.device.address, result.rssi, deviceName)
+                val currentTimestamp = System.currentTimeMillis()
+
+                val device = Device(result.device.address, result.rssi, deviceName, currentTimestamp)
                 devices[device.id] = device
             }
         }
