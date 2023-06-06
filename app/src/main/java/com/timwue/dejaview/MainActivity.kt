@@ -140,9 +140,14 @@ class MainActivity : ComponentActivity() {
                 if (result.device.name !== null){
                     deviceName = result.device.name
                 }
+
+                val deviceId = result.device.address
                 val currentTimestamp = System.currentTimeMillis()
 
-                val device = Device(result.device.address, result.rssi, deviceName, currentTimestamp)
+                val device = devices[deviceId] ?: Device(result.device.address, result.rssi, deviceName, currentTimestamp)
+                device.meetTimes.plus(currentTimestamp)
+
+
                 devices[device.id] = device
             }
         }
