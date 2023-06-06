@@ -9,8 +9,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-
-data class Device(val id : String, val rssi: Int, val name : String)
+import com.timwue.dejaview.model.Device
 
 @Composable
 fun Device(device: Device){

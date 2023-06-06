@@ -28,14 +28,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.room.Room
 import com.google.android.gms.location.*
 import com.google.android.gms.tasks.OnCompleteListener
+import com.timwue.dejaview.dao.AppDatabase
+import com.timwue.dejaview.model.Device
 import com.timwue.dejaview.ui.theme.DejaviewTheme
 import com.timwue.dejaview.usecase.checkPermissions
 import com.timwue.dejaview.usecase.requestPermissions
 import com.timwue.dejaview.view.components.Device
 import com.timwue.dejaview.view.components.DeviceList
 import com.timwue.dejaview.view.components.GpsLocation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -46,10 +53,24 @@ class MainActivity : ComponentActivity() {
     private var devices = mutableMapOf<String, Device>()
     private var currentLocation = mutableStateOf<Location?>(null)
     private var PERMISSION_ID = 44
+    private lateinit var db : AppDatabase
 
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        this.db = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java, "database-name"
+        ).build()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
+                val deviceList = db.deviceDao().getAll()
+                deviceList.forEach{
+                    devices[it.id]= it
+                }
+            }
+        }
 
         initializeBleAdapter()
         initializeLocationProvider()
@@ -84,6 +105,12 @@ class MainActivity : ComponentActivity() {
 
         if (checkPermissions(this)) {
             bluetoothLeScanner.stopScan(scanCallback)
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
+                val deviceList = devices.values.toList().toTypedArray()
+                db.deviceDao().insertAll(*deviceList)            }
         }
     }
 
