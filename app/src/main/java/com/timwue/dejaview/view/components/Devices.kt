@@ -1,6 +1,7 @@
 package com.timwue.dejaview.view.components
 
 import android.bluetooth.le.ScanResult
+import android.util.Log
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +28,12 @@ fun Device(device: Device){
         rssi = device.rssi.toString()
     }
 
+    val seen = if (seenBefore(device)){
+         "Yes"
+    } else {
+         "No"
+    }
+
     Row(
         Modifier
             .fillMaxWidth()
@@ -37,10 +44,13 @@ fun Device(device: Device){
           Text(text = device.name, style = MaterialTheme.typography.body1)
           Text(text = device.id, style = MaterialTheme.typography.body2)
       }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(rssi, style = MaterialTheme.typography.body1, textAlign = TextAlign.End )
-            Text(text = formatTime(device.lastSeen), style = MaterialTheme.typography.body2)
+        Column {
+            Text(seen, style = MaterialTheme.typography.body1)
         }
+    Column(horizontalAlignment = Alignment.End) {
+        Text(rssi, style = MaterialTheme.typography.body1, textAlign = TextAlign.End )
+        Text(text = formatTime(device.lastSeen), style = MaterialTheme.typography.body2)
+    }
     }
 }
 
@@ -50,9 +60,18 @@ fun formatTime(milliseconds: Long): String {
     return sdf.format(date)
 }
 
+val TWELVE_HOURS = 43200000L
+val FIVE_HOURS = 18000000L
+val FOUR_HOURS = 14400000L
+val ONE_MINUTE = 60000L
+fun seenBefore(device: Device): Boolean {
+    val diffs = device.meetTimes.map { device.lastSeen - it}
+    return diffs.any{it > FOUR_HOURS}
+}
+
 @Composable
 fun DeviceList(devices : List<Device>){
-    LazyColumn(Modifier.fillMaxHeight()){
+    LazyColumn(){
         items(devices){ device -> Device(device) }
     }
 }

@@ -16,7 +16,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.provider.Settings
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,20 +25,15 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.room.Room
 import com.google.android.gms.location.*
-import com.google.android.gms.tasks.OnCompleteListener
 import com.timwue.dejaview.dao.AppDatabase
 import com.timwue.dejaview.model.Device
 import com.timwue.dejaview.ui.theme.DejaviewTheme
 import com.timwue.dejaview.usecase.checkPermissions
 import com.timwue.dejaview.usecase.requestPermissions
-import com.timwue.dejaview.view.components.Device
-import com.timwue.dejaview.view.components.DeviceList
-import com.timwue.dejaview.view.components.GpsLocation
+import com.timwue.dejaview.view.components.MyAppNavHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,7 +66,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        initializeBleAdapter()
         initializeLocationProvider()
 
         setContent {
@@ -81,17 +74,27 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
-                    Column {
-                        GpsLocation(currentLocation.value)
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        DeviceList(devices.values.sortedByDescending { device -> device.lastSeen })
-                    }
+                   MyAppNavHost(devices = devices.values.toList(), location = currentLocation.value, startBLEScan = {startBLEScan()}, stopBLEScan = {stopBLEScan()})
                 }
             }
         }
     }
+    @RequiresApi(Build.VERSION_CODES.S)
+    @SuppressLint("MissingPermission")
+    fun stopBLEScan(){
+        if (checkPermissions(this)) {
+            bluetoothLeScanner.stopScan(scanCallback)
+        }
+      saveDevices()
+    }
 
+    private fun saveDevices(){
+        lifecycleScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
+                val deviceList = devices.values.toList().toTypedArray()
+                db.deviceDao().insertAll(*deviceList)            }
+        }
+    }
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onResume() {
         super.onResume()
@@ -101,17 +104,8 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onPause() {
         super.onPause()
+        saveDevices()
         locationProvider.removeLocationUpdates(locationCallback)
-
-        if (checkPermissions(this)) {
-            bluetoothLeScanner.stopScan(scanCallback)
-        }
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.IO) {
-                val deviceList = devices.values.toList().toTypedArray()
-                db.deviceDao().insertAll(*deviceList)            }
-        }
     }
 
     private fun initializeLocationProvider(){
@@ -127,7 +121,7 @@ class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.S)
     @SuppressLint("MissingPermission")
-    private fun initializeBleAdapter(){
+    private fun startBLEScan(){
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val bluetoothAdapter = bluetoothManager.adapter
         if (!bluetoothAdapter.isEnabled || !packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
@@ -140,7 +134,11 @@ class MainActivity : ComponentActivity() {
                 val deviceName = result.device.name ?: "N/A"
                 val deviceId = result.device.address
                 val device = devices[deviceId] ?: Device(result.device.address, result.rssi, deviceName, currentTimestamp)
-                device.meetTimes.plus(currentTimestamp)
+
+                if (device.meetTimes.isNotEmpty() && (currentTimestamp - device.meetTimes.last()) > 3600000L ){ //if more than one hour away
+                    device.meetTimes = device.meetTimes.plus(currentTimestamp)
+                }
+                device.lastSeen = currentTimestamp
                 devices[device.id] = device
             }
         }

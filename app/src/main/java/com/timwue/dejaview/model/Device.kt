@@ -12,6 +12,6 @@ data class Device(
     @PrimaryKey @ColumnInfo(name = "id") val id : String,
     @ColumnInfo(name = "rssi") val rssi: Int,
     @ColumnInfo(name = "name") val name: String,
-    @ColumnInfo(name = "lastSeen") val lastSeen: Long,
-    @ColumnInfo(name = "meetTimes") val meetTimes: List<Long> = emptyList()
+    @ColumnInfo(name = "lastSeen") var lastSeen: Long,
+    @ColumnInfo(name = "meetTimes") var meetTimes: List<Long> = emptyList()
 )

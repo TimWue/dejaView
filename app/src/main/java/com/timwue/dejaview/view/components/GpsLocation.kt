@@ -21,10 +21,7 @@ fun GpsLocation(location : Location?){
         lonString = location.longitude.toString()
     }
 
-    Column( Modifier
-        .padding(16.dp, 8.dp)
-        .fillMaxWidth(),
-    ) {
+    Column{
         Text(
             "Latitude: $latString",
             Modifier.fillMaxWidth(),
