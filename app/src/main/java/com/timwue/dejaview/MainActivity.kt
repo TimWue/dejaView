@@ -47,15 +47,12 @@ class MainActivity : ComponentActivity() {
     private var devices = mutableMapOf<String, Device>()
     private var currentLocation = mutableStateOf<Location?>(null)
     private var PERMISSION_ID = 44
-    private lateinit var db : AppDatabase
+    private lateinit var db : AppDatabase;
 
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        this.db = Room.databaseBuilder(
-            applicationContext,
-            AppDatabase::class.java, "database-name"
-        ).build()
+        db = AppDatabase.getDatabase(this)
 
         lifecycleScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.IO) {
@@ -74,7 +71,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
-                   MyAppNavHost(devices = devices.values.toList(), location = currentLocation.value, startBLEScan = {startBLEScan()}, stopBLEScan = {stopBLEScan()})
+                   MyAppNavHost(database = db, devices = devices.values.toList(), location = currentLocation.value, startBLEScan = {startBLEScan()}, stopBLEScan = {stopBLEScan()})
                 }
             }
         }

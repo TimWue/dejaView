@@ -17,11 +17,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.timwue.dejaview.dao.AppDatabase
 import com.timwue.dejaview.model.Device
 
 @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
 @Composable
 fun MyAppNavHost(
+    database: AppDatabase,
     devices : List<Device>, location : Location?,
     startBLEScan: ()->Unit, stopBLEScan: ()->Unit,
     modifier: Modifier = Modifier,
@@ -45,7 +47,7 @@ fun MyAppNavHost(
                 LiveView(startBLEScan,stopBLEScan,devices.filter { seenRecently(it) }, location)
             }
             composable("history-view") {
-                HistoryView(devices)
+                HistoryView(database)
             }
             }
         }
