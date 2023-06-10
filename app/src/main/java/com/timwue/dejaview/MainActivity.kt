@@ -128,13 +128,21 @@ class MainActivity : ComponentActivity() {
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val currentTimestamp = System.currentTimeMillis()
-                val deviceName = result.device.name ?: "N/A"
+                val deviceName = result.device.name ?: result.device.alias ?: "N/A"
+
                 val deviceId = result.device.address
                 val device = devices[deviceId] ?: Device(result.device.address, result.rssi, deviceName, currentTimestamp)
 
-                if (device.meetTimes.isNotEmpty() && (currentTimestamp - device.meetTimes.last()) > 3600000L ){ //if more than one hour away
-                    device.meetTimes = device.meetTimes.plus(currentTimestamp)
+                if (device.meetTimes.isNotEmpty()) {
+
+                    // if more than one hour away
+                    if ((currentTimestamp - device.meetTimes.last()) > 3600000L ){
+                        device.meetTimes = device.meetTimes.plus(currentTimestamp)
+                    }
+                } else {
+                        device.meetTimes = device.meetTimes.plus(currentTimestamp)
                 }
+
                 device.lastSeen = currentTimestamp
                 devices[device.id] = device
             }
